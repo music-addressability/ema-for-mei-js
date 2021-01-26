@@ -12,47 +12,47 @@ const bach: string = fs.readFileSync(bachPath).toString()
 const bachEma: MeiDoc = MeiDoc.fromString(bach)
 
 describe('EMA for MEI', () => {
-  // it('should read an MEI file', () => {
-  //   expect(bachEma).exist
-  // })
+  it('should read an MEI file', () => {
+    expect(bachEma).exist
+  })
 
-  // it('should get a doc info', () => {
-  //   const docInfo: DocInfo = bachEma.getDocumentInfo()
-  //   expect(docInfo.measures).equal(49)
-  // })
+  it('should get a doc info', () => {
+    const docInfo: DocInfo = bachEma.getDocumentInfo()
+    expect(docInfo.measures).equal(49)
+  })
 
-  // it('should build a parser from a full EMA expression', async () => {
-  //   const expr = `all/all/@all`
-  //   const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
-  //   expect(emaMei.emaExp.docInfo).exist
-  // })
+  it('should build a parser from a full EMA expression', async () => {
+    const expr = `all/all/@all`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    expect(emaMei.emaExp.docInfo).exist
+  })
 
-  // it('should build a parser from a full EMA expression (remote)', async () => {
-  //   const encUri = encodeURIComponent('https://raw.githubusercontent.com/music-encoding/sample-encodings/master/MEI_4.0/Music/Complete_examples/Bach_Musikalisches_Opfer_Trio.mei')
-  //   const fullExpr = `/${encUri}/all/all/@all`
-  //   const emaMei: EmaMeiProcessor = await EmaMei.withFullExpr(fullExpr)
-  //   expect(emaMei.emaExp.docInfo).exist
-  // })
+  it('should build a parser from a full EMA expression (remote)', async () => {
+    const encUri = encodeURIComponent('https://raw.githubusercontent.com/music-encoding/sample-encodings/master/MEI_4.0/Music/Complete_examples/Bach_Musikalisches_Opfer_Trio.mei')
+    const fullExpr = `/${encUri}/all/all/@all`
+    const emaMei: EmaMeiProcessor = await EmaMei.withFullExpr(fullExpr)
+    expect(emaMei.emaExp.docInfo).exist
+  })
 
-  // it('should return a modified MEI document with the selection applied (measures, simple)', async () => {
-  //   const expr = `1-2/all/@all`
-  //   const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
-  //   expect(emaMei.getSelection().querySelectorAll('*|music *|measure').length).equal(2)
-  // })
+  it('should return a modified MEI document with the selection applied (measures, simple)', async () => {
+    const expr = `1-2/all/@all`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    expect(emaMei.getSelection().querySelectorAll('*|music *|measure').length).equal(2)
+  })
 
-  // it('should return a modified MEI document with the selection applied (measures, ranges)', async () => {
-  //   const expr = `1-2,10-15/all/@all`
-  //   const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
-  //   expect(emaMei.getSelection().querySelectorAll('*|music *|measure').length).equal(8)
-  // })
+  it('should return a modified MEI document with the selection applied (measures, ranges)', async () => {
+    const expr = `1-2,10-15/all/@all`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    expect(emaMei.getSelection().querySelectorAll('*|music *|measure').length).equal(8)
+  })
 
-  // it('should return a modified MEI document with the selection applied (scoreDef removed)', async () => {
-  //   const scoreDefTestFile: string = path.resolve(__dirname, './data/scoreDefTest.mei')
-  //   const testData: string = fs.readFileSync(scoreDefTestFile).toString()
-  //   const expr = `1-2,10-15/all/@all`
-  //   const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(testData, expr)
-  //   expect(emaMei.getSelection().querySelectorAll('*|music *|scoreDef').length).equal(2)
-  // })
+  it('should return a modified MEI document with the selection applied (scoreDef removed)', async () => {
+    const scoreDefTestFile: string = path.resolve(__dirname, './data/scoreDefTest.mei')
+    const testData: string = fs.readFileSync(scoreDefTestFile).toString()
+    const expr = `1-2,10-15/all/@all`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(testData, expr)
+    expect(emaMei.getSelection().querySelectorAll('*|music *|scoreDef').length).equal(2)
+  })
 
   it('should return a modified MEI document with the selection applied (staves, simple)', async () => {
     const expr = `1-2/2/@all`
