@@ -1,5 +1,5 @@
 import EmaExp from '@ema/parser/dist/EmaExp'
-import {DocInfo} from '@ema/parser'
+import {DocInfo, BeatInfo} from '@ema/parser'
 import MeiDoc from './MeiDoc'
 
 export default class EmaMeiProcessor {
@@ -15,6 +15,60 @@ export default class EmaMeiProcessor {
     this.emaExp = emaExp
   }
 
+  private _getCurrentMeter(mIdx: number) {
+    // Return current meter information from docInfo based on measure index
+    let meter: BeatInfo
+    for (const change of Object.keys(this.docInfo.beats)) {
+      const c = parseInt(change, 10)
+      if (c + 1 <= mIdx) {
+        meter = this.docInfo.beats[c]
+      }
+    }
+    return meter
+  }
+
+  private _calculateDur(element: Element, meter: BeatInfo) {
+    // Determine the duration of an element given a meter.
+    let dur: number
+    switch (element.getAttribute('dur')) {
+      case 'breve':
+        dur = 0.5
+      case 'long':
+        dur = 0.25
+      default:
+        dur = parseFloat(element.getAttribute('dur'))
+    }
+    let relativeDur = meter.unit / dur
+
+    // Collect dots.
+    let dots = 0
+    if (element.getAttribute('dots')) {
+      dots = parseInt(element.getAttribute('dots'), 10)
+    } else if (element.querySelector('dot')) {
+      dots = element.querySelectorAll('dot').length
+    }
+
+    let dotDur = dur
+    for (const d of Array(dots+1)) {
+      dotDur = dotDur * 2
+      relativeDur += meter.unit / dotDur
+    }
+
+    // Account for tuplets.
+    const tupl = element.closest('tuplet')
+    if (tupl) {
+      const numbase = tupl.getAttribute('numbase')
+      const num = tupl.getAttribute('num')
+
+      if (!num || !numbase) {
+        throw new Error('Cannot understand tuplet beat: both @num and @numbase must be present')
+      }
+
+      const tuplRatio = parseFloat(numbase) / parseFloat(num)
+      relativeDur = relativeDur * tuplRatio
+    }
+  }
+
   public getSelection() {
     // Return a modified MEI doc containing the selected notation
     // provided a EMA expression of measures, staves, and beats.
@@ -24,12 +78,18 @@ export default class EmaMeiProcessor {
 
     // Remove all elements before and after a measure range,
     // leaving elements within range untouched
+
+    // Things we need to keep track of as we traverse:
     let mCount = 0
     let inRange = false
+    let meter: BeatInfo
+    let currentBeat: number = 1.0
 
+    // Stacks:
     const toRemove: Element[] = []
     const checkAgain: Element[] = []
 
+    // Set up walker.
     const music = this.mei.querySelector('*|music')
     if (music.namespaceURI !== this.ns) {
       throw new Error('Could not find MEI <music> element')
@@ -37,32 +97,76 @@ export default class EmaMeiProcessor {
 
     const walker: TreeWalker = this.mei.createTreeWalker(music, 1)
 
+    // Walk.
     while (walker.nextNode()) {
       const el = walker.currentNode as Element
+
       // Skip element if it's not MEI
       if (el.namespaceURI !== this.ns) continue
 
       if (el.tagName.toLowerCase() === 'measure') {
         mCount++
         if (this.emaExp.selection.getMeasure(mCount)) {
+          // Check meter from docInfo
+          meter = this._getCurrentMeter(mCount)
           inRange = true
         } else {
           inRange = false
         }
 
       } else if (inRange) {
-        // When in range, mark for deletion unselected staves and elements with @staff
         if (el.tagName.toLowerCase() === 'staff') {
+          // Mark for deletion staves outside of staff range.
+
           const n = parseInt(el.getAttribute('n'), 10)
           if (isNaN(n)) continue
           if (!this.emaExp.selection.getMeasure(mCount).getStaff(n)) {
             toRemove.push(el)
           }
         } else if (el.getAttribute('staff')) {
+          // Mark for deletion elements with @staff outside of staff range.
+
           const n = parseInt(el.getAttribute('staff'), 10)
           if (isNaN(n)) continue
           if (!this.emaExp.selection.getMeasure(mCount).getStaff(n)) {
             toRemove.push(el)
+          }
+        } else if (el.tagName.toLowerCase() === 'layer') {
+          // Reset beat count at each layer in range.
+
+          currentBeat = 1.0
+        } else if (el.getAttribute('dur') && !el.getAttribute('grace')) {
+          // Mark for deletion elements with @dur outside of beat range.
+
+          // Determine staff.
+          const n = el.closest('staff')
+            ? parseInt(el.closest('staff').getAttribute('n'), 10)
+            : parseInt(el.getAttribute('staff'), 10)
+          if (isNaN(n)) {
+            throw new Error('Cannot determine staff for event in range.')
+          }
+          const beatRanges = this.emaExp.selection.getMeasure(mCount).getStaff(n)
+          // Skip if this beat is in an unselected staff.
+          if (!beatRanges) continue
+
+          // See if event fits in beat range or mark for deletion.
+          const dur = this._calculateDur(el, meter)
+          for (const beatRange of beatRanges) {
+            // Resolve beat range tokens using .toArray
+            beatRange.resolveRangeTokens(meter.count)
+            if (currentBeat < beatRange.start) {
+              // below starting point. Discard.
+              toRemove.push(el)
+            } else {
+              // We round to 4 decimal places to avoid issues caused by
+              // tuplet-related calculations, which are admittedly not
+              // well expressed in floating numbers.
+              if (parseFloat(currentBeat.toFixed(4))
+               > parseFloat((beatRange.end as number).toFixed(4))) {
+                // Above ending point. Discard.
+                toRemove.push(el)
+              }
+            }
           }
         }
       }
