@@ -77,6 +77,11 @@ describe('EMA for MEI', () => {
     expect(
       selection
       .querySelector('*|music *|measure[n="1"]')
+      .querySelectorAll('*|staff').length)
+    .equal(1)
+    expect(
+      selection
+      .querySelector('*|music *|measure[n="1"]')
       .querySelector('*|staff[n="2"]'))
     .exist
     expect(
@@ -97,7 +102,17 @@ describe('EMA for MEI', () => {
     const layers = emaMei.getSelection().querySelectorAll('*|music *|measure *|layer')
     // time sig: 3/4
     expect(layers[0].querySelectorAll('*').length).equal(1) // mRest
-    expect(layers[1].querySelectorAll('*|note').length).equal(4) // beat 1: 8. 16; beat 2: 8grace 4
-    expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1: 8 8; beat 2: 8 8
+    expect(layers[1].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8. 16, 8grace 4
+    expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8 8, 8 8
+  })
+
+  it('should return a modified MEI document with the selection applied (beats, ranges in-layer)', async () => {
+    const expr = `1-2/all/@1-2@3`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    const layers = emaMei.getSelection().querySelectorAll('*|music *|measure *|layer')
+    // time sig: 3/4
+    expect(layers[0].querySelectorAll('*').length).equal(1) // mRest
+    expect(layers[1].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8. 16, 8grace 4; beat 3: n/a
+    expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8 8, 8; beat 3: 8
   })
 })

@@ -135,7 +135,6 @@ export default class EmaMeiProcessor {
           }
         } else if (el.tagName.toLowerCase() === 'layer') {
           // Reset beat count at each layer in range.
-
           currentBeat = 1.0
         } else if (el.getAttribute('dur') && !el.getAttribute('grace')) {
           // Mark for deletion elements with @dur outside of beat range.
@@ -151,23 +150,28 @@ export default class EmaMeiProcessor {
           // Skip if this beat is in an unselected staff.
           if (!beatRanges) continue
 
-          // See if event fits in beat range or mark for deletion.
+          // See if event fits in beat in *any* range or mark for deletion.
+          let inBeatRange = false
           for (const beatRange of beatRanges) {
+            if (inBeatRange) continue
             // Resolve beat range tokens
             beatRange.resolveRangeTokens(meter.count)
-            if (currentBeat < beatRange.start) {
-              // below starting point. Discard.
-              toRemove.push(el)
-            } else {
-              // We round to 4 decimal places to avoid issues caused by
-              // tuplet-related calculations, which are admittedly not
-              // well expressed in floating numbers.
-              if (parseFloat(currentBeat.toFixed(4))
+
+            // Discard if below or above starting point.
+            // We round to 4 decimal places to avoid issues caused by
+            // tuplet-related calculations, which are admittedly not
+            // well expressed in floating numbers.
+            if (currentBeat < beatRange.start
+              || parseFloat(currentBeat.toFixed(4))
                > parseFloat((beatRange.end as number).toFixed(4))) {
-                // Above ending point. Discard.
-                toRemove.push(el)
-              }
+              inBeatRange = false
+            } else {
+              inBeatRange = true
             }
+          }
+          // Once it's been confirmed that the even isn't in range, mark it for removal.
+          if (!inBeatRange) {
+            toRemove.push(el)
           }
           const dur = this._calculateDur(el, meter)
           currentBeat += dur
