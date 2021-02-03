@@ -90,4 +90,14 @@ describe('EMA for MEI', () => {
       .querySelector('*|music *|measure[n="2"] > *|slur[staff="2"]')
     ).exist
   })
+
+  it('should return a modified MEI document with the selection applied (beats, simple in-layer)', async () => {
+    const expr = `1-2/all/@1-2.5`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    const layers = emaMei.getSelection().querySelectorAll('*|music *|measure *|layer')
+    // time sig: 3/4
+    expect(layers[0].querySelectorAll('*').length).equal(1) // mRest
+    expect(layers[1].querySelectorAll('*|note').length).equal(4) // beat 1: 8. 16; beat 2: 8grace 4
+    expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1: 8 8; beat 2: 8 8
+  })
 })

@@ -49,7 +49,7 @@ export default class EmaMeiProcessor {
     }
 
     let dotDur = dur
-    for (const d of Array(dots+1)) {
+    for (const d of Array(dots)) {
       dotDur = dotDur * 2
       relativeDur += meter.unit / dotDur
     }
@@ -67,6 +67,8 @@ export default class EmaMeiProcessor {
       const tuplRatio = parseFloat(numbase) / parseFloat(num)
       relativeDur = relativeDur * tuplRatio
     }
+
+    return relativeDur
   }
 
   public getSelection() {
@@ -150,9 +152,8 @@ export default class EmaMeiProcessor {
           if (!beatRanges) continue
 
           // See if event fits in beat range or mark for deletion.
-          const dur = this._calculateDur(el, meter)
           for (const beatRange of beatRanges) {
-            // Resolve beat range tokens using .toArray
+            // Resolve beat range tokens
             beatRange.resolveRangeTokens(meter.count)
             if (currentBeat < beatRange.start) {
               // below starting point. Discard.
@@ -168,6 +169,8 @@ export default class EmaMeiProcessor {
               }
             }
           }
+          const dur = this._calculateDur(el, meter)
+          currentBeat += dur
         }
       }
 
