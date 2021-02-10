@@ -71,6 +71,16 @@ export default class EmaMeiProcessor {
     return relativeDur
   }
 
+  private _getBeatRangesForElement(element: Element, mCount: number) {
+    const n = element.closest('staff')
+      ? parseInt(element.closest('staff').getAttribute('n'), 10)
+      : parseInt(element.getAttribute('staff'), 10)
+    if (isNaN(n)) {
+      throw new Error('Cannot determine staff for event in range.')
+    }
+    return this.emaExp.selection.getMeasure(mCount).getStaff(n)
+  }
+
   public getSelection() {
     // Return a modified MEI doc containing the selected notation
     // provided a EMA expression of measures, staves, and beats.
@@ -130,23 +140,43 @@ export default class EmaMeiProcessor {
 
           const n = parseInt(el.getAttribute('staff'), 10)
           if (isNaN(n)) continue
-          if (!this.emaExp.selection.getMeasure(mCount).getStaff(n)) {
+
+          const beatRanges = this.emaExp.selection.getMeasure(mCount).getStaff(n)
+          if (!beatRanges) {
             toRemove.push(el)
           }
+
+          // Mark for deletion @staff elements with @tstamp outside of beat range.
+          if (el.getAttribute('tstamp')) {
+            // Get and normalize time stamp (beat location)
+            let ts = parseFloat(el.getAttribute('tstamp'))
+            ts = ts < 1 ? 1 : ts
+
+            // See if event fits in beat in *any* range or mark for deletion.
+            for (const beatRange of beatRanges) {
+              // Resolve beat range tokens
+              beatRange.resolveRangeTokens(meter.count)
+
+              // Discard if below or above starting point.
+              // We round to 4 decimal places to avoid issues caused by
+              // tuplet-related calculations, which are admittedly not
+              // well expressed in floating numbers.
+              if (ts < beatRange.start
+                || parseFloat(ts.toFixed(4))
+                 > parseFloat((beatRange.end as number).toFixed(4))) {
+                toRemove.push(el)
+              }
+            }
+          }
+          
         } else if (el.tagName.toLowerCase() === 'layer') {
           // Reset beat count at each layer in range.
           currentBeat = 1.0
         } else if (el.getAttribute('dur') && !el.getAttribute('grace')) {
           // Mark for deletion elements with @dur outside of beat range.
 
-          // Determine staff.
-          const n = el.closest('staff')
-            ? parseInt(el.closest('staff').getAttribute('n'), 10)
-            : parseInt(el.getAttribute('staff'), 10)
-          if (isNaN(n)) {
-            throw new Error('Cannot determine staff for event in range.')
-          }
-          const beatRanges = this.emaExp.selection.getMeasure(mCount).getStaff(n)
+          // Determine beat ranges.
+          const beatRanges = this._getBeatRangesForElement(el, mCount)
           // Skip if this beat is in an unselected staff.
           if (!beatRanges) continue
 
