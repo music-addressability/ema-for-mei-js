@@ -116,12 +116,21 @@ describe('EMA for MEI', () => {
     expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8 8, 8; beat 3: 8
   })
 
-  it('should return a modified MEI document with the selection applied (beats, ranges out-of-layer)', async () => {
+  it('should return a modified MEI document with the selection applied (beats, ranges out-of-layer, @tstamp)', async () => {
     const expr = `2/all/@1-2`
     const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
     const measures = emaMei.getSelection().querySelectorAll('*|music *|measure')
     // time sig: 3/4
     expect(measures[0].querySelector('*|harm[tstamp="1"]')).exist
     expect(measures[0].querySelector('*|harm[tstamp="3"]')).not.exist
+  })
+
+  it('should return a modified MEI document with the selection applied (beats, ranges out-of-layer, @startid)', async () => {
+    const expr = `2/all/@1-2`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    const measures = emaMei.getSelection().querySelectorAll('*|music *|measure')
+    // time sig: 3/4
+    expect(measures[0].querySelector('*|slur[startid="#m2_s2_e2"]')).not.exist
+    expect(measures[0].querySelector('*|slur[startid="#m2_s3_e1"]')).exist
   })
 })

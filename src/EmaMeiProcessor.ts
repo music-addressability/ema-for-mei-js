@@ -71,14 +71,39 @@ export default class EmaMeiProcessor {
     return relativeDur
   }
 
-  private _getBeatRangesForElement(element: Element, mCount: number) {
+  private _isElementInBeatRanges(element: Element, measureNum: number, meter:number, currentBeat: number) {
     const n = element.closest('staff')
       ? parseInt(element.closest('staff').getAttribute('n'), 10)
       : parseInt(element.getAttribute('staff'), 10)
     if (isNaN(n)) {
       throw new Error('Cannot determine staff for event in range.')
     }
-    return this.emaExp.selection.getMeasure(mCount).getStaff(n)
+    const beatRanges = this.emaExp.selection.getMeasure(measureNum).getStaff(n)
+
+    // Skip if this beat is in an unselected staff.
+    if (!beatRanges) return false
+
+    // See if event fits in beat in *any* range or mark for deletion.
+    let inBeatRange = false
+    for (const beatRange of beatRanges) {
+      if (inBeatRange) continue
+      // Resolve beat range tokens
+      beatRange.resolveRangeTokens(meter)
+
+      // Discard if below or above starting point.
+      // We round to 4 decimal places to avoid issues caused by
+      // tuplet-related calculations, which are admittedly not
+      // well expressed in floating numbers.
+      if (currentBeat < beatRange.start
+        || parseFloat(currentBeat.toFixed(4))
+         > parseFloat((beatRange.end as number).toFixed(4))) {
+        inBeatRange = false
+      } else {
+        inBeatRange = true
+      }
+    }
+
+    return inBeatRange
   }
 
   public getSelection() {
@@ -144,6 +169,7 @@ export default class EmaMeiProcessor {
           const beatRanges = this.emaExp.selection.getMeasure(mCount).getStaff(n)
           if (!beatRanges) {
             toRemove.push(el)
+            continue
           }
 
           // Mark for deletion @staff elements with @tstamp outside of beat range.
@@ -168,7 +194,7 @@ export default class EmaMeiProcessor {
               }
             }
           }
-          
+
         } else if (el.tagName.toLowerCase() === 'layer') {
           // Reset beat count at each layer in range.
           currentBeat = 1.0
@@ -176,33 +202,21 @@ export default class EmaMeiProcessor {
           // Mark for deletion elements with @dur outside of beat range.
 
           // Determine beat ranges.
-          const beatRanges = this._getBeatRangesForElement(el, mCount)
-          // Skip if this beat is in an unselected staff.
-          if (!beatRanges) continue
+          const inBeatRanges = this._isElementInBeatRanges(el, mCount, meter.count, currentBeat)
 
-          // See if event fits in beat in *any* range or mark for deletion.
-          let inBeatRange = false
-          for (const beatRange of beatRanges) {
-            if (inBeatRange) continue
-            // Resolve beat range tokens
-            beatRange.resolveRangeTokens(meter.count)
+          // Once it's been confirmed that the even isn't in range, mark it for removal.
+          if (!inBeatRanges) {
+            toRemove.push(el)
 
-            // Discard if below or above starting point.
-            // We round to 4 decimal places to avoid issues caused by
-            // tuplet-related calculations, which are admittedly not
-            // well expressed in floating numbers.
-            if (currentBeat < beatRange.start
-              || parseFloat(currentBeat.toFixed(4))
-               > parseFloat((beatRange.end as number).toFixed(4))) {
-              inBeatRange = false
-            } else {
-              inBeatRange = true
+            // Check for attached out-of-staff events and mark those for removal, too.
+            const id = el.getAttribute('xml:id')
+            if (id) {
+              el.closest('*|measure').querySelectorAll(`*[startid="#${id}"]`).forEach(e => {
+                toRemove.push(e)
+              })
             }
           }
-          // Once it's been confirmed that the even isn't in range, mark it for removal.
-          if (!inBeatRange) {
-            toRemove.push(el)
-          }
+
           const dur = this._calculateDur(el, meter)
           currentBeat += dur
         }
@@ -243,6 +257,8 @@ export default class EmaMeiProcessor {
         el.parentElement.removeChild(el)
       }
     }
+
+    // TODO: Clean up empty note-containing elements such as <beam>.
 
     // Clean up unnecessary scoreDefs, by walking again on the reduced tree
     // There must be a measure before encountering the next scoreDef, else remove.
