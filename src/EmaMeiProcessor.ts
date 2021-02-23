@@ -2,6 +2,8 @@ import EmaExp from '@ema/parser/dist/EmaExp'
 import {DocInfo, BeatInfo} from '@ema/parser'
 import MeiDoc from './MeiDoc'
 
+type PositionInRange = 'in' | 'out' | 'between'
+
 export default class EmaMeiProcessor {
   public ns: string
   public mei: Document
@@ -71,7 +73,8 @@ export default class EmaMeiProcessor {
     return relativeDur
   }
 
-  private _isElementInBeatRanges(element: Element, measureNum: number, meter:number, currentBeat: number) {
+  private _getPositionInRanges(element: Element, measureNum: number, meter:number, currentBeat: number)
+  : PositionInRange {
     const n = element.closest('staff')
       ? parseInt(element.closest('staff').getAttribute('n'), 10)
       : parseInt(element.getAttribute('staff'), 10)
@@ -81,12 +84,12 @@ export default class EmaMeiProcessor {
     const beatRanges = this.emaExp.selection.getMeasure(measureNum).getStaff(n)
 
     // Skip if this beat is in an unselected staff.
-    if (!beatRanges) return false
+    if (!beatRanges) return 'out'
 
     // See if event fits in beat in *any* range or mark for deletion.
-    let inBeatRange = false
-    for (const beatRange of beatRanges) {
-      if (inBeatRange) continue
+    let inBeatRange: PositionInRange = 'out'
+    for (const [i, beatRange] of beatRanges.entries()) {
+      if (inBeatRange === 'in') continue
       // Resolve beat range tokens
       beatRange.resolveRangeTokens(meter)
 
@@ -94,12 +97,19 @@ export default class EmaMeiProcessor {
       // We round to 4 decimal places to avoid issues caused by
       // tuplet-related calculations, which are admittedly not
       // well expressed in floating numbers.
-      if (currentBeat < beatRange.start
-        || parseFloat(currentBeat.toFixed(4))
-         > parseFloat((beatRange.end as number).toFixed(4))) {
-        inBeatRange = false
+      const isBefore = currentBeat < beatRange.start
+      const isAfter = parseFloat(currentBeat.toFixed(4)) > parseFloat(
+        (beatRange.end as number).toFixed(4))
+      if (isBefore || isAfter) {
+        // If this isn't the last range, then this event is in between ranges
+        // TODO: This isn't working because the condition will always end up being through on the last iteration
+        if (i+1 === beatRanges.length && isAfter) {
+          inBeatRange = 'out'
+        } else {
+          inBeatRange = 'between'
+        }
       } else {
-        inBeatRange = true
+        inBeatRange = 'in'
       }
     }
 
@@ -124,6 +134,7 @@ export default class EmaMeiProcessor {
 
     // Stacks:
     const toRemove: Element[] = []
+    const markedAsSpace: Element[] = []
     const checkAgain: Element[] = []
 
     // Set up walker.
@@ -199,16 +210,20 @@ export default class EmaMeiProcessor {
           // Reset beat count at each layer in range.
           currentBeat = 1.0
         } else if (el.getAttribute('dur') && !el.getAttribute('grace')) {
-          // Mark for deletion elements with @dur outside of beat range.
+          // Mark elements with @dur outside of beat range for either removal or replacement as space
 
           // Determine beat ranges.
-          const inBeatRanges = this._isElementInBeatRanges(el, mCount, meter.count, currentBeat)
+          const inBeatRanges: PositionInRange = this._getPositionInRanges(el, mCount, meter.count, currentBeat)
 
-          // Once it's been confirmed that the even isn't in range, mark it for removal.
-          if (!inBeatRanges) {
+          // Once it's been confirmed that the even isn't in range, mark it for removal or replacement.
+          if (inBeatRanges === 'out') {
             toRemove.push(el)
+          } else if (inBeatRanges === 'between') {
+            markedAsSpace.push(el)
+          }
 
-            // Check for attached out-of-staff events and mark those for removal, too.
+          // Whether it's out or in between, check for attached out-of-staff events and mark those for removal.
+          if (inBeatRanges === 'out' || inBeatRanges === 'between') {
             const id = el.getAttribute('xml:id')
             if (id) {
               el.closest('*|measure').querySelectorAll(`*[startid="#${id}"]`).forEach(e => {
@@ -241,12 +256,30 @@ export default class EmaMeiProcessor {
       }
     }
 
-    // })
-
     // Remove all elements marked for removal.
     for (const r of toRemove) {
       if (r.parentElement) {
         r.parentElement.removeChild(r)
+      }
+    }
+
+    // Replace with spaces all elements marked for replacement.
+    for (const sp of markedAsSpace) {
+      if (sp.parentElement) {
+        const dur = sp.getAttribute('dur')
+        let dots = parseInt(sp.getAttribute('dots'), 10)
+        if (!dots) {
+          dots = sp.querySelectorAll('*|dot').length
+        }
+        if (dur) {
+          const spaceEl: Element = this.mei.createElementNS(this.ns, 'space')
+          spaceEl.setAttribute('dur', dur)
+          if (dots > 0) {
+            spaceEl.setAttribute('dots', dots.toString())
+          }
+          sp.parentElement.insertBefore(spaceEl, sp)
+        }
+        sp.parentElement.removeChild(sp)
       }
     }
 
@@ -258,10 +291,7 @@ export default class EmaMeiProcessor {
       }
     }
 
-    // TODO: Clean up empty note-containing elements such as <beam>.
-
-    // Clean up unnecessary scoreDefs, by walking again on the reduced tree
-    // There must be a measure before encountering the next scoreDef, else remove.
+    // Second pass cleanup.
     const selectedWalker: TreeWalker = this.mei.createTreeWalker(music, 1)
 
     const toPurge: Element[] = []
@@ -270,6 +300,9 @@ export default class EmaMeiProcessor {
       const el = selectedWalker.currentNode as Element
       // Skip element if it's not MEI
       if (el.namespaceURI !== this.ns) continue
+
+      // Clean up unnecessary scoreDefs, by walking again on the reduced tree
+      // There must be a measure before encountering the next scoreDef, else remove.
       if (el.tagName.toLowerCase() === 'scoredef') {
         if (!hasMeasures) {
           toPurge.push(el)
@@ -280,6 +313,33 @@ export default class EmaMeiProcessor {
 
       if (el.tagName.toLowerCase() === 'measure') {
         hasMeasures = true
+      }
+
+      // Clean up empty note-containing elements.
+      // The following note-containing elements are excluded because they can be meaningfully empty:
+      // lem, orig, rdg, reg, restore, sic
+
+      switch (el.tagName.toLowerCase()) {
+        case 'abbr':
+        case 'add':
+        case 'bTrem':
+        case 'beam':
+        case 'chord':
+        case 'corr':
+        case 'damage':
+        case 'del':
+        case 'expan':
+        case 'fTrem':
+        case 'graceGrp':
+        case 'layer':
+        case 'ligature':
+        case 'oLayer':
+        case 'supplied':
+        case 'syllable':
+        case 'tuplet':
+        case 'unclear':
+          if (el.children.length === 0) toPurge.push(el)
+        default:
       }
     }
 
