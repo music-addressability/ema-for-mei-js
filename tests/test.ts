@@ -116,6 +116,16 @@ describe('EMA for MEI', () => {
     expect(layers[2].querySelectorAll('*|note').length).equal(4) // beat 1-2: 8 8, 8; beat 3: 8
   })
 
+  it('should return a modified MEI document with the selection applied (beats, fill gaps)', async () => {
+    const expr = `1/3/@1-1.5@3-3.5`
+    const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
+    const layer = emaMei.getSelection().querySelector('*|music *|measure *|layer')
+    // time sig: 3/4
+    // expected result: 8 8 (8) (8) 8 8
+    expect(layer.querySelectorAll('*|note').length).equal(4)
+    expect(layer.querySelectorAll('*|space').length).equal(2)
+  })
+
   it('should return a modified MEI document with the selection applied (beats, ranges out-of-layer, @tstamp)', async () => {
     const expr = `2/all/@1-2`
     const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
@@ -133,4 +143,5 @@ describe('EMA for MEI', () => {
     expect(measures[0].querySelector('*|slur[startid="#m2_s2_e2"]')).not.exist
     expect(measures[0].querySelector('*|slur[startid="#m2_s3_e1"]')).exist
   })
+
 })
