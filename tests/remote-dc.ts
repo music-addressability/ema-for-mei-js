@@ -2,6 +2,7 @@ import 'isomorphic-fetch'
 import * as jsonld from 'jsonld'
 import { expect } from 'chai'
 import { JSDOM } from 'jsdom'
+import * as pLimit from 'p-limit'
 
 import EmaMei from '../src/EmaMei'
 import EmaMeiProcessor from '../src/EmaMeiProcessor'
@@ -15,16 +16,17 @@ const OASpecificResource = 'http://www.w3.org/ns/oa#SpecificResource'
 const OAHasSource = 'http://www.w3.org/ns/oa#hasSource'
 // const totPages = 11
 
+const limit = pLimit(1)
+
 describe('EMA for MEI - Remote Digital DuChemin Tests', () => {
   // Get a page of Digital DuChemin Nanopublications and
   // test the EMA expression there against the old python implementation.
   it('should test a page of Digital DuChemin nanopubs', async () => {
-    const list: string = await fetch(`${nanopubListURL}?page=1`).then(response => {
-      if (!response.ok) {
-        throw new Error(response.statusText)
-      }
-      return response.text()
-    })
+    const resList = await fetch(`${nanopubListURL}?page=1`)
+    if (!resList.ok) {
+      throw new Error(resList.statusText)
+    }
+    const list: string = await resList.text()
 
     const npURIs = list.split('\r\n').filter(x => x !== '')
 
@@ -33,36 +35,28 @@ describe('EMA for MEI - Remote Digital DuChemin Tests', () => {
       const npID = npURI.substring(npURI.lastIndexOf('.')+1)
       const npURL = `${nanopubServer}/${npID}.jsonld`
 
-      const graphs = await fetch(npURL).then(r => {
-        if (!r.ok) {
-          throw new Error(r.statusText)
-        }
-        return r.json()
-      })
+      const resGraphs = await fetch(npURL)
+      if (!resGraphs.ok) {
+        throw new Error(resGraphs.statusText)
+      }
+      const graphs = await resGraphs.json()
 
-      const ema = await jsonld.frame(graphs, {
+      const frame = await jsonld.frame(graphs, {
         '@type': OASpecificResource
-      }).then(f => {
-        const subGraph = f[OAHasSource] as jsonld.NodeObject
-        return subGraph['@id'].replace('mith.umd.edu/ema', 'ema.mith.us')
       })
 
-      let untestable = false
-      const omasResult = await fetch(ema).then(r => {
-        if (r.status >= 400) {
-          untestable = true
-          return
-        }
-        if (!r.ok) {
-          throw new Error(r.statusText)
-        }
-        return r.text()
-      })
+      const subGraph = frame[OAHasSource] as jsonld.NodeObject
+      const ema = subGraph['@id'].replace('mith.umd.edu/ema', 'ema.mith.us')
 
-      if (untestable) {
+      const resOmas = await limit(async () => await fetch(ema))
+      if (resOmas.status >= 400) {
         console.log(`Could not retrieve ${ema}`)
         continue
       }
+      if (!resOmas.ok) {
+        throw new Error(resOmas.statusText)
+      }
+      const omasResult = await resOmas.text()
 
       const emaExpr = ema.replace('http://ema.mith.us', '')
       console.log(`Checking: ${emaExpr}`)
@@ -79,16 +73,18 @@ describe('EMA for MEI - Remote Digital DuChemin Tests', () => {
         .equal(emaJsMeasures.length)
 
       // Compare staves total per measure
-      for (const [i, om] of Array.from(omasMeasures).entries()) {
-        const jm = emaJsMeasures[i]
-        const omasStaves = om.querySelectorAll('*|staff')
-        const emaJsStaves = jm.querySelectorAll('*|staff')
+      for (const [mIdx, om] of Array.from(omasMeasures).entries()) {
+        const jm = emaJsMeasures[mIdx]
+        // NB: only checking measure > staff because editorial elements (e.g. app/rdg)
+        // are treated differently in the two implementations (API is agnostic).
+        const omasStaves = om.querySelectorAll('*|measure > *|staff')
+        const emaJsStaves = jm.querySelectorAll('*|measure > *|staff')
         expect(omasStaves.length)
           .equal(emaJsStaves.length)
 
         // Compare number of elements in staff and layer
-        for (const [i, os] of Array.from(omasStaves).entries()) {
-          const js = emaJsStaves[i]
+        for (const [sIdx, os] of Array.from(omasStaves).entries()) {
+          const js = emaJsStaves[sIdx]
 
           expect(os.querySelectorAll('*').length)
             .equal(js.querySelectorAll('*').length)
