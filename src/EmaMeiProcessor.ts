@@ -2,6 +2,8 @@ import EmaExp from '@ema/parser/dist/EmaExp'
 import {DocInfo, BeatInfo} from '@ema/parser'
 import MeiDoc from './MeiDoc'
 
+import { v4 as uuid } from 'uuid'
+
 type PositionInRange = 'in' | 'out' | 'between'
 
 export default class EmaMeiProcessor {
@@ -102,7 +104,6 @@ export default class EmaMeiProcessor {
         (beatRange.end as number).toFixed(4))
       if (isBefore || isAfter) {
         // If this isn't the last range, then this event is in between ranges
-        // TODO: This isn't working because the condition will always end up being through on the last iteration
         if (i+1 === beatRanges.length && isAfter) {
           inBeatRange = 'out'
         } else {
@@ -126,6 +127,8 @@ export default class EmaMeiProcessor {
     // Remove all elements before and after a measure range,
     // leaving elements within range untouched
 
+    const completeness = this.emaExp.completeness
+
     // Things we need to keep track of as we traverse:
     let mCount = 0
     let inRange = false
@@ -136,6 +139,7 @@ export default class EmaMeiProcessor {
     const toRemove: Element[] = []
     const markedAsSpace: Element[] = []
     const checkAgain: Element[] = []
+    const toHighlight: Element[] = []
 
     // Set up walker.
     const music = this.mei.querySelector('*|music')
@@ -151,6 +155,8 @@ export default class EmaMeiProcessor {
 
       // Skip element if it's not MEI
       if (el.namespaceURI !== this.ns) continue
+
+      // TODO: deal with multiRest
 
       if (el.tagName.toLowerCase() === 'measure') {
         mCount++
@@ -174,6 +180,7 @@ export default class EmaMeiProcessor {
         } else if (el.getAttribute('staff')) {
           // Mark for deletion elements with @staff outside of staff range.
 
+          let highlighted = false
           const n = parseInt(el.getAttribute('staff'), 10)
           if (isNaN(n)) continue
 
@@ -181,6 +188,9 @@ export default class EmaMeiProcessor {
           if (!beatRanges) {
             toRemove.push(el)
             continue
+          } else if (!highlighted && completeness === 'highlight') {
+            toHighlight.push(el)
+            highlighted = true
           }
 
           // Mark for deletion @staff elements with @tstamp outside of beat range.
@@ -202,6 +212,9 @@ export default class EmaMeiProcessor {
                 || parseFloat(ts.toFixed(4))
                  > parseFloat((beatRange.end as number).toFixed(4))) {
                 toRemove.push(el)
+              } else if (!highlighted && completeness === 'highlight') {
+                toHighlight.push(el)
+                highlighted = true
               }
             }
           }
@@ -210,16 +223,21 @@ export default class EmaMeiProcessor {
           // Reset beat count at each layer in range.
           currentBeat = 1.0
         } else if (el.getAttribute('dur') && !el.getAttribute('grace')) {
+          // TODO: deal with grace notes before, after, between selection within measure in range
+
           // Mark elements with @dur outside of beat range for either removal or replacement as space
 
           // Determine beat ranges.
           const inBeatRanges: PositionInRange = this._getPositionInRanges(el, mCount, meter.count, currentBeat)
 
-          // Once it's been confirmed that the even isn't in range, mark it for removal or replacement.
+          // Once it's been confirmed that the event isn't in range, mark it for removal or replacement.
           if (inBeatRanges === 'out') {
             toRemove.push(el)
           } else if (inBeatRanges === 'between') {
             markedAsSpace.push(el)
+          } else if (completeness === 'highlight') {
+            // TODO: lookback to grace notes that immediately precede this event and select them
+            toHighlight.push(el)
           }
 
           // Whether it's out or in between, check for attached out-of-staff events and mark those for removal.
@@ -234,6 +252,9 @@ export default class EmaMeiProcessor {
 
           const dur = this._calculateDur(el, meter)
           currentBeat += dur
+        } else if (completeness === 'highlight' && el.tagName.toLowerCase() === 'mrest') {
+          // non-dur elements still need to be highlighted
+          toHighlight.push(el)
         }
       }
 
@@ -254,6 +275,29 @@ export default class EmaMeiProcessor {
         && el.tagName.toLowerCase() !== 'staffdef') {
         toRemove.push(el)
       }
+    }
+
+    // If we're just highlighting, create annotation element and return
+    if (completeness === 'highlight') {
+      const ids = toHighlight.map(el => {
+        const xmlid = el.getAttribute('xml:id')
+        if (xmlid) {
+          return `#${xmlid}`
+        }
+        // Create id when not present
+        const newid = `ema-${uuid()}`
+        el.setAttribute('xml:id', newid)
+        return `#${newid}`
+      })
+
+      const score = this.mei.getElementsByTagNameNS(this.ns, 'score')[0]
+      const annot = this.mei.createElementNS(this.ns, 'annot')
+      annot.setAttribute('type', 'ema_highlight')
+      annot.setAttribute('plist', ids.join(' '))
+      score.appendChild(annot)
+
+      this.processed = true
+      return this.mei
     }
 
     // Remove all elements marked for removal.
