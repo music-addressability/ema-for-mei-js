@@ -8,7 +8,7 @@
     "build": "tsc",
     "test": "mocha -r ts-node/register tests/test.ts",
     "dctest": "mocha -r ts-node/register tests/remote-dc.ts",
-    "crimtest": "mocha -r ts-node/register tests/crim.ts",
+    "crimtest": "ts-node tests/crim.ts",
     "coverage": "nyc -r lcov -e .ts -x \"*.test.ts\" npm run test"
   },
   "keywords": [

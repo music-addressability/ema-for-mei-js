@@ -34,11 +34,13 @@ export default class EmaMeiProcessor {
   private _calculateDur(element: Element, meter: BeatInfo) {
     // Determine the duration of an element given a meter.
     let dur: number
-    switch (element.getAttribute('dur')) {
+    switch (element.getAttribute('dur').trim()) {
       case 'breve':
         dur = 0.5
+        break
       case 'long':
         dur = 0.25
+        break
       default:
         dur = parseFloat(element.getAttribute('dur'))
     }
@@ -177,8 +179,8 @@ export default class EmaMeiProcessor {
           if (!this.emaExp.selection.getMeasure(mCount).getStaff(n)) {
             toRemove.push(el)
           }
-        } else if (el.getAttribute('staff')) {
-          // Mark for deletion elements with @staff outside of staff range.
+        } else if (el.getAttribute('staff') && el.tagName.toLowerCase() !== 'clef') {
+          // Mark for deletion elements with @staff outside of staff range, except clefs
 
           let highlighted = false
           const n = parseInt(el.getAttribute('staff'), 10)
@@ -245,7 +247,10 @@ export default class EmaMeiProcessor {
             const id = el.getAttribute('xml:id')
             if (id) {
               el.closest('*|measure').querySelectorAll(`*[startid="#${id}"]`).forEach(e => {
-                toRemove.push(e)
+                // make sure the referring element does not contain the referred element (edge case)
+                if (!e.contains(el)) {
+                  toRemove.push(e)
+                }
               })
             }
           }
@@ -265,14 +270,15 @@ export default class EmaMeiProcessor {
         continue
       }
 
-      // mark elements not in range for removal, but keep scoreDefs and their children, and staffDefs.
+      // mark elements not in range for removal, but keep clefs, scoreDefs and their children, and staffDefs.
       // N.B.: staffDefs within measures out of range will be removed.
       // N.B.: parentElement.closest() is equiv to ancestor-or-self.
       if (!inRange
-        && !el.parentElement.closest('*|measure')
+        && (el.tagName.toLowerCase() === 'clef' ||
+        !el.parentElement.closest('*|measure')
         && !el.parentElement.closest('*|scoreDef')
         && el.tagName.toLowerCase() !== 'scoredef'
-        && el.tagName.toLowerCase() !== 'staffdef') {
+        && el.tagName.toLowerCase() !== 'staffdef')) {
         toRemove.push(el)
       }
     }
@@ -309,6 +315,7 @@ export default class EmaMeiProcessor {
 
     // Replace with spaces all elements marked for replacement.
     for (const sp of markedAsSpace) {
+      // The tuplet notes are being processed here, but somehow the tuplet gets lost at some point
       if (sp.parentElement) {
         const dur = sp.getAttribute('dur')
         let dots = parseInt(sp.getAttribute('dots'), 10)

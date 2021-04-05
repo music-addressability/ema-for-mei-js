@@ -10,3 +10,4 @@ dist/**/*
 *.log
 node_modules
 
+tests/data/crim_selections
