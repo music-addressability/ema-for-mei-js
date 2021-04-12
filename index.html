@@ -1,0 +1,131 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>ema-mei-js</title>
+  <script src="ema-mei.js"></script>
+  <script src="verovio-toolkit.js"></script>
+
+</head>
+
+<body>
+  <h1>Enhancing Music Notation Addressability (EMA)</h1>
+  <h2>Testing environment for in-browser support.</h2>
+  <h5 id="ema"></h5>
+  <div id="status"></div>
+
+  <div>
+    <textarea id="emainput" style="width:100%" row="4" placeholder="https%3A%2F%2Fraw.githubusercontent.com%2FCRIM-Project%2FCRIM-online%2Fmaster%2Fcrim%2Fstatic%2Fmei%2FMEI_3.0%2FCRIM_Mass_0014_3.mei/109-112/1-4,1-4,1-4,1-4/@1-3+@1-3+@1-3+@1-3,@1-3.5+@1-3+@1-2+@1-3,@1-3+@1-2+@1-2+@1-2,@1+@1+@1+@1/highlight"></textarea>
+    <br/><button onclick="process()">Process</button>
+  </div>
+
+  <div id="mei"></div>
+  <script>
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const paramExpr = urlParams.get('expr')
+
+    if (paramExpr) {
+      process(paramExpr)
+    }
+
+    function process(paramExpr) {
+      let expr = ""
+      if (paramExpr) {
+        expr = paramExpr
+      } else {
+        expr = document.getElementById('emainput').value || document.getElementById('emainput').placeholder
+      }
+      var viewer = document.getElementById('mei')
+
+      console.log(expr)
+
+      viewer.innerHTML = "Loading..."
+
+      let status = ""
+      status += "Starting Verovio...<br/>"
+      const t0 = performance.now()
+      var vrvToolkit = new verovio.toolkit()
+      vrvToolkit.setOptions({
+        pageWidth: 4200,
+        ignoreLayout: 1,
+        scale: 30,
+        border: 0,
+        footer: 'none',
+        header: 'none'
+      })
+      const t1 = performance.now()
+      status += "...done after " + (t1-t0) + " milliseconds.<br/>"
+
+      status += "Processing EMA on remote file...<br/>"
+      const t2 = performance.now()
+
+      EmaMei.withFullExpr(expr)
+        .then(function (r) {
+          var expr = r.emaExp.measures + "/" + r.emaExp.staves + "/" + r.emaExp.beats
+          if (r.emaExp.completeness) {
+            expr +=  "/" + r.emaExp.completeness
+          }
+          document.getElementById('ema').innerHTML = expr
+
+          var selection = r.getSelection()
+          var mei = (new XMLSerializer).serializeToString(selection)
+
+          const t3 = performance.now()
+          status += "...done after " + (t3-t2) + " milliseconds.<br/>"
+
+          status += "Rendering pages with Verovio...<br/>"
+          const t4 = performance.now()
+
+          var data = vrvToolkit.loadData(mei, {})
+          for (i=1; i <= vrvToolkit.getPageCount(); i++) {
+            if (i === 1) {
+              viewer.innerHTML = vrvToolkit.renderPage(i)
+            } 
+            else {
+              viewer.innerHTML = viewer.innerHTML + vrvToolkit.renderPage(i)
+            }
+          }
+
+          const t5 = performance.now()
+          status += "...done after " + (t5-t4) + " milliseconds.<br/>"
+
+          // highlight
+          if (r.emaExp.completeness === 'highlight') {
+
+            status += "Highlighting notation...<br/>"
+            const t6 = performance.now()
+
+            const highlightedIds = selection.querySelector('annot[type="ema_highlight"]').getAttribute('plist').split(' ')
+            for (const id of highlightedIds) {
+              const event = document.querySelector(id)
+              if (event) {
+                event.style.color = "#f90"
+                event.style.fill = "currentColor"
+              }
+            }
+
+            const t7 = performance.now()
+            status += "...done after " + (t7-t6) + " milliseconds.<br/>"
+
+            const first = document.querySelector(highlightedIds[0])
+            if (first) {
+              first.scrollIntoView()
+            }
+          }
+
+          status += "Finished after "
+          status += typeof t7 !== 'undefined' ? (t7-t0) : (t5-t0)
+          status += " milliseconds.<br/>"
+
+          // document.getElementById('status').innerHTML = status
+
+        }).catch(function (err) {
+          viewer.innerHTML = "An error occurred: " + err
+        })
+    }
+  </script>
+</body>
+</html>
