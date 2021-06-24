@@ -27,13 +27,13 @@ describe('EMA for MEI', () => {
     expect(docInfo.measures).equal(49)
   })
 
-  it('should build a parser from a full EMA expression', async () => {
+  it('should build a processor from a full EMA expression', async () => {
     const expr = `all/all/@all`
     const emaMei: EmaMeiProcessor = await EmaMei.withDocumentString(bach, expr)
     expect(emaMei.emaExp.docInfo).exist
   })
 
-  it('should build a parser from a full EMA expression (remote)', async () => {
+  it('should build a processor from a full EMA expression (remote)', async () => {
     const encUri = encodeURIComponent('https://raw.githubusercontent.com/music-encoding/sample-encodings/master/MEI_4.0/Music/Complete_examples/Bach_Musikalisches_Opfer_Trio.mei')
     const fullExpr = `/${encUri}/all/all/@all`
     const emaMei: EmaMeiProcessor = await EmaMei.withFullExpr(fullExpr)
