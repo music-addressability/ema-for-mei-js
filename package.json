@@ -1,6 +1,6 @@
 {
   "name": "@emajs/mei",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An isomorphic EMA expression processor for the Music Encoding Initiative format",
   "main": "dist/EmaMei.js",
   "browser": "dist/browser/index.js",
