@@ -1,4 +1,4 @@
-import {DocInfo, StavesInfo, BeatsInfo} from '@ema/parser'
+import {DocInfo, StavesInfo, BeatsInfo} from '@emajs/parser'
 import parseFromString from './domParser/server'
 import {v4} from 'uuid'
 

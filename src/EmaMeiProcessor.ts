@@ -1,5 +1,5 @@
-import EmaExp from '@ema/parser/dist/EmaExp'
-import {DocInfo, BeatInfo} from '@ema/parser'
+import EmaExp from '@emajs/parser/dist/EmaExp'
+import {DocInfo, BeatInfo} from '@emajs/parser'
 import MeiDoc from './MeiDoc'
 
 import { v4 as uuid } from 'uuid'

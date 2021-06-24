@@ -1,11 +1,13 @@
 {
   "name": "@ema/mei",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "An isomorphic EMA expression processor for the Music Encoding Initiative format",
   "main": "dist/EmaMei.js",
   "browser": "dist/browser/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:ts && npm run build:js",
+    "build:ts": "tsc",
+    "build:js": "webpack",
     "test": "mocha -r ts-node/register tests/test.ts",
     "dctest": "mocha -r ts-node/register tests/remote-dc.ts",
     "crimtest": "ts-node tests/crim.ts",
@@ -27,13 +29,16 @@
     "chai": "^4.2.0",
     "mocha": "^8.0.1",
     "nyc": "^15.1.0",
+    "ts-loader": "^9.2.3",
     "ts-node": "^8.10.2",
     "tslint": "^6.1.2",
     "tslint-config-standard": "^9.0.0",
-    "typescript": "^3.9.6"
+    "typescript": "^3.9.6",
+    "webpack": "^5.40.0",
+    "webpack-cli": "^4.7.2"
   },
   "dependencies": {
-    "@ema/parser": "../ema-js-parser",
+    "@emajs/parser": "^1.0.0",
     "@types/isomorphic-fetch": "^0.0.35",
     "@types/jsdom": "^16.2.3",
     "@types/jsonld": "^1.5.2",

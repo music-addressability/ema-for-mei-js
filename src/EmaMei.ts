@@ -1,4 +1,4 @@
-import EmaExp from '@ema/parser'
+import EmaExp from '@emajs/parser'
 import MeiDoc from './MeiDoc'
 import EmaMeiProcessor from './EmaMeiProcessor'
 import * as fetch from 'isomorphic-fetch'

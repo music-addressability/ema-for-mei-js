@@ -3,7 +3,7 @@ import { expect } from 'chai'
 import * as fs from 'fs'
 import * as path from 'path'
 import MeiDoc from '../src/MeiDoc'
-import { DocInfo } from '@ema/parser'
+import { DocInfo } from '@emajs/parser'
 import EmaMei from '../src/EmaMei'
 import EmaMeiProcessor from '../src/EmaMeiProcessor'
 
