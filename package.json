@@ -1,5 +1,5 @@
 {
-  "name": "@ema/mei",
+  "name": "@emajs/mei",
   "version": "1.0.0",
   "description": "An isomorphic EMA expression processor for the Music Encoding Initiative format",
   "main": "dist/EmaMei.js",
