@@ -16,6 +16,14 @@ Additionally, the following completeness values are currently supported:
 
 ### Node.js (TypeScript)
 
+The processor is available as a package on npm as `@emajs/mei` and can be installed like this:
+
+```
+npm install @emajs/mei
+```
+
+Example usage
+
 ```ts
 import EmaMei from '../src/EmaMei'
 import EmaMeiProcessor from '../src/EmaMeiProcessor'
