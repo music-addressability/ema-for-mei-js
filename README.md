@@ -54,7 +54,7 @@ yarn build
     .then(function (r) {
       // The result:
       const selection = r.getSelection()   
-    }
+    })
     .catch(function (err) {
       console.log(err)
     })
